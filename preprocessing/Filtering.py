@@ -13,7 +13,7 @@ FILTER_BANDPASS_15_50HZ = {"b": [1.173510367246093e-001, 0.0, -2.347020734492186
 def filter(channelData):
     filterIIR(FILTER_NOTCH_60HZ["b"], FILTER_NOTCH_60HZ["a"], channelData)
     # filterIIR(FILTER_BANDPASS_1_50HZ["b"], FILTER_BANDPASS_1_50HZ["a"], channelData)
-    filterIIR(FILTER_BANDPASS_15_50HZ["b"], FILTER_BANDPASS_1_50HZ["a"], channelData)
+    filterIIR(FILTER_BANDPASS_15_50HZ["b"], FILTER_BANDPASS_15_50HZ["a"], channelData)
 
 def filterIIR(filtB, filtA, data):
     Nback = len(filtB)

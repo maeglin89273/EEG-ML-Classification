@@ -19,11 +19,12 @@ def getFormattedFilePath(category, fileNum):
 
 def skipComments(csvFile):
     for i in xrange(5):
-        csvFile.next();
+        csvFile.next()
 
 def filterChannels(channels):
-    for channel in channels:
-        Filtering.filter(channels[channel])
+    for channel in channels[1:]:
+        if channel:
+            Filtering.filter(channel)
 
 def discardLeadingBigWave(channels):
     for channel in channels:
@@ -34,36 +35,31 @@ def discardLeadingBigWave(channels):
 
 
 def readRawData(category, fileNum, extractChannels):
-    dataObj = {}
+    channelData = [None for i in xrange(9)]
     with open(getRawFilePath(category, fileNum), "rb") as rawDataFile:
-                csvFile = csv.reader(rawDataFile)
-                skipComments(csvFile);
+        csvFile = csv.reader(rawDataFile)
+        skipComments(csvFile)
 
-                dataObj["category"] = category
-                dataObj["number"] = fileNum
-                channelsDict = {}
-                for channel in extractChannels:
-                    channelsDict[channel] = []
+        for channel in extractChannels:
+            channelData[channel] = []
 
-                for row in csvFile:
-                    for extractChannel in extractChannels:
-                        #the first column(0) is timestamp
-                         channelsDict[extractChannel].append(float(row[extractChannel]))
+        for row in csvFile:
+            for extractChannel in extractChannels:
+                #the first column(0) is timestamp
+                 channelData[extractChannel].append(float(row[extractChannel]))
 
-                filterChannels(channelsDict)
-                discardLeadingBigWave(channelsDict)
-
-                dataObj["channels"] = channelsDict
-
-    return dataObj
+        filterChannels(channelData)
+        # discardLeadingBigWave(channelsDict)
+    return channelData
 
 def format(categories, extractChannels):
-    channelsWrap = []
+    rawDataWrap = {}
     for (category, fileAmount) in categories.items():
+        rawDataWrap[category] = []
         for fileNum in xrange(1, fileAmount + 1):
-                dataObj = readRawData(category, fileNum, extractChannels)
-                channelsWrap.append(dataObj)
-    return channelsWrap
+                channelData = readRawData(category, fileNum, extractChannels)
+                rawDataWrap[category].append(channelData)
+    return rawDataWrap
 
 
 def writeHeader(csvFile, channelNums):
@@ -83,41 +79,43 @@ def writeChannelSingleFile(dirName, channelNum, channelValues):
         csvFile.writerow([])
 
         for i, channelValue in enumerate(channelValues):
-           csvFile.writerow([i, channelValue])
+           csvFile.writerow([channelValue])
 
 
-def writeChannelsIndividualFiles(channelsDataObj, testingChannel = None):
-    dirName = os.path.join(FORMATTED_FILES_DIR, "%s_%s" % (channelsDataObj["category"], channelsDataObj["number"]));
+def writeChannelsIndividualFiles(category, fileNum, channelData, testingChannel = None):
+    dirName = os.path.join(FORMATTED_FILES_DIR, "%s_%s" % (category, fileNum));
     if (not os.path.exists(dirName)):
         os.makedirs(dirName)
 
-    channels = channelsDataObj["channels"]
-    for channelNum in channels:
-        writeChannelSingleFile(dirName, channelNum, channels[channelNum])
+    for (channelNum, channel) in enumerate(channelData):
+        if channel:
+            writeChannelSingleFile(dirName, channelNum, channel)
 
     if testingChannel:
-        writeChannelSingleFile(dirName, "test", channels[testingChannel])
+        writeChannelSingleFile(dirName, "test", channelData[testingChannel])
 
-def writeChannelsInSingleFile(channelsDataObj):
-    with open(getFormattedFilePath(channelsDataObj["category"], channelsDataObj["number"]), "wb") as formattedDataFile:
-        channels = channelsDataObj["channels"]
+def writeChannelsInSingleFile(category, fileNum, channelData):
+    with open(getFormattedFilePath(category, fileNum), "wb") as formattedDataFile:
         csvFile = csv.writer(formattedDataFile, delimiter = ",")
-        channelNums = sorted(channels.iterkeys())
-        writeHeader(csvFile, channelNums)
 
-        for row in zip(*(channels[channelNum] for channelNum in channelNums)):
+        writeHeader(csvFile, [i for i in xrange(len(channelData)) if channelData[i]])
+
+        for row in zip(*filter(lambda channel: bool(channel), channelData)):
             csvFile.writerow(row)
 
-def writeChannelsWrap(channelsWrap, testingChannel = None):
+def writeDataWrap(dataWrap, testingChannel = None):
     if IN_SINGLE_FILE:
-        for channelsDataObj in channelsWrap:
-            writeChannelsInSingleFile(channelsDataObj)
+        for category in dataWrap:
+            for (fileNum, channelData) in enumerate(dataWrap[category]):
+                writeChannelsInSingleFile(category, fileNum + 1, channelData)
     else:
-        for channelsDataObj in channelsWrap:
-            writeChannelsIndividualFiles(channelsDataObj, testingChannel)
+        for category in dataWrap:
+            for (fileNum, channelData) in enumerate(dataWrap[category]):
+                writeChannelsIndividualFiles(category, fileNum + 1, channelData, testingChannel)
 
 
 
 if __name__ == "__main__":
-    channelsWrap = format({"righthand": 4, "sleep": 1}, [1, 2, 3, 4, 8])
-    writeChannelsWrap(channelsWrap, 3)
+    dataWrap = format({"righthand": 1, "sleep": 1}, [1, 2, 3, 4])
+
+    writeDataWrap(dataWrap, 3)

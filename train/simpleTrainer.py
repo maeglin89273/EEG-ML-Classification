@@ -7,8 +7,8 @@ from util.nupic_output import NuPICPlotOutput
 __author__ = 'maeglin89273'
 
 IS_TRAINING = False
-TRAIN_DATA = ["righthand_2/channel_test.csv", "righthand_3/channel_test.csv"] * 2
-PREDICT_DATA = "sleep_1/channel_test.csv"
+TRAIN_DATA = ["rightstep_1/channel_test.csv"] * 3
+PREDICT_DATA = "rightstep_1/channel_test.csv"
 DATA_DIR = "../preprocessing/formatted_data/"
 
 

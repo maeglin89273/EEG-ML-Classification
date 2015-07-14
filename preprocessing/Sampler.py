@@ -5,26 +5,26 @@ import Formatter
 DEFAULT_SAMPLING_RATE = 5
 
 
-def sampleChannelsStream(channels, samplingRate):
-    channelNums = sorted(channels.keys())
-    sampledChannels = {channelNum: [] for channelNum in channelNums}
+def sampleChannelsStream(channelData, samplingRate):
 
-    for (i, channelValues) in enumerate(zip(*(channels[channelNum] for channelNum in channelNums))):
+    sampledData = [[] if channel else None for channel in channelData]
+
+    for (i, channelValues) in enumerate(zip(*filter(lambda channel: bool(channel), channelData))):
         if i % samplingRate == 0:
-            for (i, channelNum) in enumerate(channelNums):
-                sampledChannels[channelNum].append(channelValues[i])
+            for (j, channelNum) in enumerate((num for num in xrange(len(channelData)) if channelData[num])):
+                sampledData[channelNum].append(channelValues[j])
 
-    return sampledChannels
+    return sampledData
 
 
 def sampleChannelsWrap(channelsWrap, samplingRate):
-    for channelsDataObj in channelsWrap:
-        sampledChannels = sampleChannelsStream(channelsDataObj["channels"], samplingRate)
-        channelsDataObj["channels"] = sampledChannels
+    for category in channelsWrap:
+        for fileNum, channelData in enumerate(channelsWrap[category]):
+            sampledData = sampleChannelsStream(channelData, samplingRate)
+            channelsWrap[category][fileNum] = sampledData
 
     return channelsWrap
 
-
 if __name__ == "__main__":
     channelsWrap = Formatter.format({"righthand": 4, "sleep": 1}, [1, 2, 3, 4, 8])
-    Formatter.writeChannelsWrap(sampleChannelsWrap(channelsWrap, DEFAULT_SAMPLING_RATE), 2)
+    Formatter.writeDataWrap(sampleChannelsWrap(channelsWrap, DEFAULT_SAMPLING_RATE), 2)
