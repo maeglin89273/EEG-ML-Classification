@@ -1,7 +1,7 @@
 __author__ = 'maeglin89273'
 
-MAX_VALUE = 30.0
-MIN_VALUE = -30.0
+MAX_VALUE = 40.0
+MIN_VALUE = -40.0
 
 DESCRIPTION_TEMPLATE = {
   "includedFields": [

@@ -123,8 +123,8 @@ class NuPICPlotOutput(NuPICOutput):
       plt.legend(tuple(['anomaly score', 'anomaly likelihood']), loc=3)
 
     # Set the y-axis range.
-    MAX_VALUE=30
-    MIN_VALUE=-30
+    MAX_VALUE=50
+    MIN_VALUE=-50
     self.actual_line.axes.set_ylim(MIN_VALUE, MAX_VALUE)
     self.predicted_line.axes.set_ylim(MIN_VALUE, MAX_VALUE)
     if self.show_anomaly_score:
