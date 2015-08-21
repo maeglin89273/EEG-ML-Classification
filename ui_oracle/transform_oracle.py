@@ -1,16 +1,23 @@
+import numpy as np
+import array
+import pywt
 __author__ = 'maeglin89273'
 
 class TransformService:
 
-    def __init__(self):
-        self.fft_spectrum = None
-        self.dwt_spectrum = None
 
-    def get_FFT_spectrum(self):
-        return self.fft_spectrum
+    def fft_transform(self, signal):
 
-    def get_DWT_spectrum(self):
-        return self.dwt_spectrum
+        fft_result = np.absolute(np.fft.rfft(signal))
+        return fft_result.tolist()
 
-    def tranform(self, signal):
-        pass
+
+    def dwt_db4_transform(self, signal):
+        dwt_result = pywt.wavedec(signal, "db4")
+        return np.hstack(dwt_result).tolist()
+
+
+    def dwt_coif4_transform(self, signal):
+        dwt_result = pywt.wavedec(signal, "coif4")
+        return np.hstack(dwt_result).tolist()
+
