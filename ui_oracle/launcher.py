@@ -1,15 +1,16 @@
 import Pyro4
 import threading
 import sys
-from ui_oracle.transform_oracle import TransformService
+from ui_oracle.learning_oracle import LearningOracle
+from ui_oracle.transform_oracle import TransformOracle
 
 __author__ = 'maeglin89273'
 
 
 def register_services(daemon):
     name_uris = {}
-    name_uris["oracle.transform"] = daemon.register(TransformService())
-
+    name_uris["oracle.transform"] = daemon.register(TransformOracle())
+    name_uris["oracle.learning"] = daemon.register(LearningOracle())
     return name_uris
 
 

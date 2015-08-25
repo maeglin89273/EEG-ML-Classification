@@ -3,7 +3,7 @@ import array
 import pywt
 __author__ = 'maeglin89273'
 
-class TransformService:
+class TransformOracle:
 
     def __init__(self):
         self.dwt_mode = pywt.MODES.sym
