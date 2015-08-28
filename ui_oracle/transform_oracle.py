@@ -4,33 +4,32 @@ import pywt
 __author__ = 'maeglin89273'
 
 class TransformOracle:
+    FFT_START_FREQUENCY = 14
 
     def __init__(self):
-        self.dwt_mode = pywt.MODES.sym
+        self.dwt_mode = pywt.MODES.per
 
     def fft_transform(self, signal):
-
         fft_result = np.absolute(np.fft.rfft(signal))
-        return fft_result.tolist()
+        return fft_result[:len(fft_result) // 2].tolist()
 
     def length_after_fft(self, original_length):
         if original_length % 2 == 0:
-            return (original_length // 2) + 1
+            return ((original_length // 2) + 1) // 2
         else:
-            return (original_length + 1) // 2
+            return ((original_length + 1) // 2) // 2
 
     def dwt_db4_transform(self, signal):
         dwt_result = pywt.wavedec(signal, "db4", mode=self.dwt_mode)
-        return np.hstack(dwt_result).tolist()
+        return np.hstack(dwt_result[:-1]).tolist()
 
     def length_after_dwt_db4(self, original_length):
         mother_wavelet = pywt.Wavelet("db4")
         return self.compute_dwt_length(mother_wavelet, original_length)
 
     def dwt_coif4_transform(self, signal):
-
         dwt_result = pywt.wavedec(signal, "coif4", mode=self.dwt_mode)
-        return np.hstack(dwt_result).tolist()
+        return np.hstack(dwt_result[:-1]).tolist()
 
     def length_after_dwt_coif4(self, original_length):
         mother_wavelet = pywt.Wavelet("coif4")
@@ -42,6 +41,7 @@ class TransformOracle:
         coeff_length = original_length
         for i in range(level):
             coeff_length = pywt.dwt_coeff_len(coeff_length, mother_wavelet.dec_len, self.dwt_mode)
-            full_length += coeff_length
+            if i > 0:
+                full_length += coeff_length
 
         return full_length + coeff_length
