@@ -2,10 +2,12 @@ from matplotlib import lines
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+import pywt
+from sklearn import cross_validation
 
 from sklearn.decomposition import RandomizedPCA
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.cross_validation import train_test_split
 from sklearn.svm import SVC
 from ui_oracle.transform_oracle import TransformOracle
@@ -14,28 +16,53 @@ __author__ = 'maeglin89273'
 
 
 class LearningOracle:
+
     def __init__(self):
         self.wavelet = "coif4"
+        self.transform_funcs = {"fft": self.fft_transform, "swt": self.swt_transform}
 
-    def train(self, signals, targets):
-        self.transform_signals(signals)
+        plt.set_cmap("rainbow")
 
-        signals, targets = self.to_arrays(signals, targets)
+    def train(self, feature_selections, signals, targets):
+        self.feature_selections = feature_selections
+        signals, targets = self.preprocess(feature_selections, signals, targets)
 
         signals_train, signals_test, targets_train, targets_test = train_test_split(signals, targets, random_state=42)
 
-        # ml_algorithm = KNeighborsClassifier()
-        self.ml_algorithm = SVC(kernel="poly")
-        self.ml_algorithm.fit(signals_train, targets_train)
-        print(self.ml_algorithm.score(signals_train, targets_train))
-        print(self.ml_algorithm.score(signals_test, targets_test))
-        return self.ml_algorithm.score(signals, targets)
+        # self.ml_algorithm = KNeighborsClassifier()
+        self.classifier = SVC(kernel="poly", degree=2)
+        cv_score = cross_validation.cross_val_score(self.classifier, signals_train, targets_train, cv=5)
+
+        self.classifier.fit(signals_train, targets_train)
 
 
+        report = {}
+        report["cv_score_mean"] = cv_score.mean()
+        report["cv_score_std"] = cv_score.std()
+        report["cv_folds"] = 5
+        report["test_score"] = self.classifier.score(signals_test, targets_test)
+        report["feature_selections"] = ", ".join((TransformOracle.TRANSFORMATIOIN_FULL_NAME_TABLE[init] for init in self.feature_selections))
+        report["training_size"] = targets_train.size
+        report["testing_size"] = targets_test.size
+        report["learner_info"] = [("algorithm", "SVM"), ("kernel", "poly"), ("degree", 3)]
 
-    def pca_plot3d(self, signals, targets):
-        self.transform_signals(signals)
+        return report
+
+    def preprocess(self, feature_selections, signals, targets):
+        self.transform_signals(feature_selections, signals)
         signals, targets = self.to_arrays(signals, targets)
+        # signals = self.scale_signals(signals)
+
+        return signals, targets
+
+    def scale_signals(self, signals):
+        self.scaler = StandardScaler()
+        return self.scaler.fit_transform(signals)
+
+
+    def pca_plot3d(self, feature_selections, signals, targets):
+        signals, targets = self.preprocess(feature_selections, signals, targets)
+
         rand_pca = RandomizedPCA(n_components=3)
         rand_pca.fit(signals)
         plot_values = rand_pca.transform(signals)
@@ -47,9 +74,8 @@ class LearningOracle:
         plt.show()
         plt.close()
 
-    def pca_plot2d(self, signals, targets):
-        self.transform_signals(signals)
-        signals, targets = self.to_arrays(signals, targets)
+    def pca_plot2d(self, feature_selections, signals, targets):
+        signals, targets = self.preprocess(feature_selections, signals, targets)
         rand_pca = RandomizedPCA(n_components=2)
         rand_pca.fit(signals)
         plot_values = rand_pca.transform(signals)
@@ -70,34 +96,46 @@ class LearningOracle:
         axis.legend(scatter_proxies, labels, numpoints=1)
 
 
-    def transform_signals(self, signals):
-        # todo: make transformation selective
-        signal_tags = signals[0].keys()
+    def transform_signals(self, feature_selections, signals):
         for i, signal in enumerate(signals):
-            transformed_signal = []
-            for tag in signal_tags:
-                transformed_single_signal = np.absolute(np.fft.rfft(signal[tag]))
-                transformed_signal.append(
-                    transformed_single_signal[TransformOracle.FFT_START_FREQUENCY:len(transformed_single_signal) // 2])
-            signals[i] = transformed_signal
+            signals[i] = self.transform_signal(feature_selections, signal)
+
         return signals
 
-    def transform_signal(self, signal):
+    def fft_transform(self, signal):
+        transformed_signal = np.absolute(np.fft.rfft(signal))
+        return transformed_signal[TransformOracle.FFT_START_FREQUENCY:len(transformed_signal) // 2]
+
+    def dwt_transform(self, signal):
+        dwt_result = pywt.wavedec(signal, self.wavelet, mode=pywt.MODES.per)
+        return np.hstack(dwt_result[:-1])
+
+    def swt_transform(self, signal):
+        swt_result = pywt.swt(signal, "coif4", 3, 1)
+
+        coeff_extracted = [swt_result[0][0]]
+        for coeff_pair in swt_result:
+            coeff_extracted.append(coeff_pair[1])
+
+        return np.hstack(coeff_extracted)
+
+    def transform_signal(self, feature_selections, signal):
+
         transformed_signal = []
         for tag in signal:
-            transformed_single_signal = np.absolute(np.fft.rfft(signal[tag]))
-            transformed_signal.append(
-                transformed_single_signal[TransformOracle.FFT_START_FREQUENCY:len(transformed_single_signal) // 2])
-        return np.hstack(transformed_signal)
+            for selection in feature_selections:
+                transformed_signal.append(self.transform_funcs[selection](signal[tag]))
 
+        return np.hstack(transformed_signal)
 
     def to_arrays(self, signals, targets):
         self.label_encoder = LabelEncoder()
         self.label_encoder.fit(targets)
         targets = self.label_encoder.transform(targets)
         signals = np.array(signals)
-        return signals.reshape(signals.shape[0], -1), targets
+        return signals, targets
 
     def predict(self, signal):
-        result = self.ml_algorithm.predict(self.transform_signal(signal)[np.newaxis, :])
+        # result = self.classifier.predict(self.scaler.transform(self.transform_signal(self.feature_selections, signal)[np.newaxis, :]))
+        result = self.classifier.predict(self.transform_signal(self.feature_selections, signal)[np.newaxis, :])
         return str(self.label_encoder.inverse_transform(result[0]))

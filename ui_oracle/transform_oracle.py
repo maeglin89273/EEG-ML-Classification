@@ -4,14 +4,16 @@ import pywt
 __author__ = 'maeglin89273'
 
 class TransformOracle:
-    FFT_START_FREQUENCY = 14
-
+    FFT_START_FREQUENCY = 0
+    TRANSFORMATIOIN_FULL_NAME_TABLE = {"fft": "Fast Fourier Transform",
+                                       "swt": "Stationary Wavelet Transform",
+                                       "dwt": "Discrete Wavelet Transform"}
     def __init__(self):
         self.dwt_mode = pywt.MODES.per
 
     def fft_transform(self, signal):
         fft_result = np.absolute(np.fft.rfft(signal))
-        return fft_result[:len(fft_result) // 2].tolist()
+        return (fft_result[:len(fft_result) // 2] / len(signal)).tolist()
 
     def length_after_fft(self, original_length):
         if original_length % 2 == 0:
@@ -45,3 +47,15 @@ class TransformOracle:
                 full_length += coeff_length
 
         return full_length + coeff_length
+
+    def swt_coif4_transform(self, signal):
+        swt_result = pywt.swt(signal, "coif4", 3, 1)
+
+        coeff_extracted = [swt_result[0][0]]
+        for coeff_pair in swt_result:
+            coeff_extracted.append(coeff_pair[1])
+
+        return np.hstack(coeff_extracted).tolist()
+
+    def length_after_swt_coif4(self, original_length):
+         return 4 * original_length
