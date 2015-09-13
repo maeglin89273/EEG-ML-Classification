@@ -33,7 +33,7 @@ def start_service_daemon():
 
 
 def main():
-    sys.excepthook = Pyro4.util.excepthook
+    # sys.excepthook = Pyro4.util.excepthook
     # dispatch_new_thread_to_nameserver()
     start_service_daemon()
 
