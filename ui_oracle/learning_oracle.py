@@ -9,9 +9,11 @@ from sklearn import cross_validation
 from sklearn.decomposition import RandomizedPCA, FastICA, PCA
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 from sklearn.cross_validation import train_test_split
 from sklearn.svm import SVC
+from sklearn.utils import shuffle
 from ui_oracle.transform_oracle import TransformOracle
 
 __author__ = 'maeglin89273'
@@ -22,6 +24,7 @@ class LearningOracle:
     def __init__(self):
         self.transform_oracle = TransformOracle()
         plt.set_cmap("rainbow")
+        self.training_settings = None
         self.plot_table = {"2d": self.pca_plot2d, "3d": self.pca_plot3d}
         self.classifier_table = {"svm": SVC(), "k_nearest_neighbor": KNeighborsClassifier()}
         self.classifier_param_restructure_func = {"svm": self.svm_param_resturcture}
@@ -40,16 +43,33 @@ class LearningOracle:
     def train(self, signals, targets, transformations):
         dataset_settings = self.training_settings["evaluation"]["train"]
         classifier_settings = self.training_settings["classifier"]
-        test_size = dataset_settings["training_partition"] / 100
-        signals_train, signals_test, targets_train, targets_test = train_test_split(signals, targets, train_size=test_size)
 
-        classifier_key = LearningOracle.getOnlyKey(classifier_settings)
+        signals_train = None
+        targets_train = None
+        if "training_partition" in dataset_settings:
+            test_size = dataset_settings["training_partition"] / 100
+            signals_train, signals_test, targets_train, targets_test = train_test_split(signals, targets, train_size=test_size)
+        else:
+            signals_train, targets_train = shuffle(signals, targets)
+            signals_test = targets_test = np.array([])
+
+        classifier_key = LearningOracle.get_only_key(classifier_settings)
         self.classifier = self.classifier_table[classifier_key]
 
         params = classifier_settings[classifier_key]
         params = self.classifier_param_restructure_func[classifier_key](params)
 
-        grid_search = GridSearchCV(self.classifier, params, cv=dataset_settings["cross_validation"])
+        cv_option = dataset_settings["cross_validation"]
+        cv = None
+        cv_text = None
+        if "k_fold" in cv_option:
+            cv = cross_validation.StratifiedKFold(targets_train, cv_option["k_fold"])
+            cv_text = str(cv_option["k_fold"]) + " folds"
+        else:
+            cv = cross_validation.LeavePOut(targets_train.size, cv_option["leave_p_out"])
+            cv_text = "leave " + str(cv_option["leave_p_out"]) + " out"
+
+        grid_search = GridSearchCV(self.classifier, params, cv=cv)
         grid_search.fit(signals_train, targets_train)
 
         self.classifier = grid_search.best_estimator_
@@ -58,9 +78,9 @@ class LearningOracle:
         best_params_profile = sorted(grid_search.grid_scores_, key=lambda x: x.mean_validation_score, reverse=True)[0]
 
         report = {}
-        report["Cross Validation Mean Score"] = "%.2f%%(+/-%.2f%%, %s folds)" % (best_params_profile.mean_validation_score * 100,
+        report["Cross Validation Mean Score"] = "%.2f%%(+/-%.2f%%, %s)" % (best_params_profile.mean_validation_score * 100,
                                                                                   np.std(best_params_profile.cv_validation_scores) * 100,
-                                                                                  dataset_settings["cross_validation"])
+                                                                                  cv_text)
 
         if dataset_settings["evaluate_test_set"]:
             report["Test Set Score"] = "%.2f%%" % (self.classifier.score(signals_test, targets_test) * 100,)
@@ -72,7 +92,7 @@ class LearningOracle:
         return report
 
     @staticmethod
-    def getOnlyKey(dict):
+    def get_only_key(dict):
         return next(iter(dict.keys()))
 
     def svm_param_resturcture(self, params):
@@ -93,16 +113,15 @@ class LearningOracle:
         signals, targets = self.to_arrays(signals, targets)
 
         after_transformation_settings = feature_settings["after_transformation"]
-
+        self.preprocess_steps = []
         if "scaler" in after_transformation_settings:
-            self.scaler = self.scalers[after_transformation_settings["scaler"]]
-            signals = self.scaler.fit_transform(signals)
+            self.preprocess_steps.append(self.scalers[after_transformation_settings["scaler"]])
 
         if "pca" in after_transformation_settings:
-            self.pca = RandomizedPCA(n_components=after_transformation_settings["pca"])
-            signals = self.pca.fit_transform(signals)
+            self.preprocess_steps.append(RandomizedPCA(n_components=after_transformation_settings["pca"]))
 
-
+        for step in self.preprocess_steps:
+            signals = step.fit_transform(signals)
 
         return signals, targets, transformations
 
@@ -180,6 +199,14 @@ class LearningOracle:
         return signals, targets
 
     def predict(self, signal):
-        # result = self.classifier.predict(self.scaler.transform(self.transform_signal(self.feature_selections, signal)[np.newaxis, :]))
-        result = self.classifier.predict(self.transform_signal(signal)[np.newaxis, :])
-        return str(self.label_encoder.inverse_transform(result[0]))
+        if self.training_settings:
+            result = self.classifier.predict(self.after_transformation(self.transform_signal(signal))[np.newaxis, :])
+            return str(self.label_encoder.inverse_transform(result[0]))
+
+        return None
+
+    def after_transformation(self, signal):
+        for step in self.preprocess_steps:
+            signal = step.transform(signal)
+
+        return signal
