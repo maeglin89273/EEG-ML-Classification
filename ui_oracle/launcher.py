@@ -1,6 +1,7 @@
 import Pyro4
 import threading
 import sys
+from ui_oracle.json_file_oracle import JsonFileOracle
 from ui_oracle.learning_oracle import LearningOracle
 from ui_oracle.transform_oracle import TransformOracle
 
@@ -11,6 +12,7 @@ def register_services(daemon):
     name_uris = {}
     name_uris["oracle.transform"] = daemon.register(TransformOracle())
     name_uris["oracle.learning"] = daemon.register(LearningOracle())
+    name_uris["oracle.json-file"] = daemon.register(JsonFileOracle())
     return name_uris
 
 

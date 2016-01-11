@@ -26,8 +26,9 @@ class LearningOracle:
         plt.set_cmap("rainbow")
         self.training_settings = None
         self.plot_table = {"2d": self.pca_plot2d, "3d": self.pca_plot3d}
+        self.param_space_table = {"linear": np.linspace, "log": np.logspace}
         self.classifier_table = {"svm": SVC(), "k_nearest_neighbor": KNeighborsClassifier()}
-        self.classifier_param_restructure_func = {"svm": self.svm_param_resturcture}
+        self.classifier_param_restructure_func = {"svm": self.svm_param_restructure}
         self.scalers = {"mean_std_scaler": StandardScaler(), "min_max_scaler": MinMaxScaler()}
 
     def evaluate(self, training_settings, signals, targets):
@@ -77,6 +78,7 @@ class LearningOracle:
 
         best_params_profile = sorted(grid_search.grid_scores_, key=lambda x: x.mean_validation_score, reverse=True)[0]
 
+        #report construction
         report = {}
         report["Cross Validation Mean Score"] = "%.2f%%(+/-%.2f%%, %s)" % (best_params_profile.mean_validation_score * 100,
                                                                                   np.std(best_params_profile.cv_validation_scores) * 100,
@@ -88,24 +90,31 @@ class LearningOracle:
         report["Size of Training Set"] = targets_train.size
         report["Size of Test Set"] = targets_test.size
         report["Best Parameters"] = best_params_profile.parameters
-
+        report["Classes"] = [str(label) for label in self.label_encoder.classes_]
         return report
 
     @staticmethod
     def get_only_key(dict):
         return next(iter(dict.keys()))
 
-    def svm_param_resturcture(self, params):
+    def svm_param_restructure(self, params):
 
-        new_params = []
+        restructured_params = []
         for kernel in params:
-            single_settings = params[kernel]
-            single_settings["kernel"] = [kernel]
-            single_settings["C"] = single_settings["c"]
-            del single_settings["c"]
-            new_params.append(single_settings)
+            specific_kernel_settings = params[kernel]
 
-        return new_params
+            specific_kernel_settings["C"] = specific_kernel_settings["c"]
+            del specific_kernel_settings["c"]
+
+            for param in specific_kernel_settings:
+                space_settings = specific_kernel_settings[param]
+                specific_kernel_settings[param] = self.param_space_table[space_settings["mode"]](space_settings["start"], space_settings["stop"], space_settings["num"])
+
+            specific_kernel_settings["kernel"] = [kernel]
+            restructured_params.append(specific_kernel_settings)
+
+        return restructured_params
+
 
     def preprocess(self, signals, targets):
         feature_settings = self.training_settings["feature_extraction"]
@@ -199,14 +208,19 @@ class LearningOracle:
         return signals, targets
 
     def predict(self, signal):
-        if self.training_settings:
-            result = self.classifier.predict(self.after_transformation(self.transform_signal(signal))[np.newaxis, :])
+        if self.hasModel():
+            signal = self.after_transformation(self.transform_signal(signal))
+            result = self.classifier.predict(signal)
             return str(self.label_encoder.inverse_transform(result[0]))
 
         return None
+
+
+    def hasModel(self):
+        return self.training_settings != None
 
     def after_transformation(self, signal):
         for step in self.preprocess_steps:
             signal = step.transform(signal)
 
-        return signal
+        return signal.reshape((1, -1))
